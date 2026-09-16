@@ -144,8 +144,6 @@ class Manager:
                     result['registered'] = self._format_record(registered)
 
                 # guarda o registro
-                if len(filename) > 80:
-                    result['warning'] = {"filename": filename}
                 saved = self.save(
                     session, registered, v2, v3, aop, filename, doi, status, generate_v3
                 )
@@ -192,11 +190,11 @@ class Manager:
             unique_v3 = generate_v3()
 
     def _register(self, session, v2, v3, aop, filename, doi, status, row=None):
-        filename = (filename or "")[:MAX_FILENAME_LENGTH]
-        prefix_v2 = v2 and v2[:-5] or ""
-        prefix_aop = aop and aop[:-5] or ""
-        if row:
-            # update
+        filename = (filename or "")[:MAX_FILENAME_LENGTH]  # [F1 · C2]
+        prefix_v2 = v2[:-5] if v2 else ""
+        prefix_aop = aop[:-5] if aop else ""
+
+        if row is not None:
             data = {
                 "v2": v2,
                 "v3": v3 or row.v3,
@@ -208,22 +206,23 @@ class Manager:
                 "prefix_v2": prefix_v2 or row.prefix_v2,
             }
             session.query(NewPidVersion).filter(
-                NewPidVersion.id == row.id).update(data)
+                NewPidVersion.id == row.id
+            ).update(data, synchronize_session=False)
             return data
-        else:
-            # create
-            data = NewPidVersion(
-                v2=v2,
-                v3=v3,
-                aop=aop or "",
-                filename=filename or "",
-                doi=doi or "",
-                status=status or "",
-                prefix_aop=prefix_aop,
-                prefix_v2=prefix_v2,
-            )
-            session.add(data)
-            return self._format_record(data)
+
+        record = NewPidVersion(
+            v2=v2,
+            v3=v3,
+            aop=aop or "",
+            filename=filename,
+            doi=doi or "",
+            status=status or "",
+            prefix_aop=prefix_aop,
+            prefix_v2=prefix_v2,
+        )
+        session.add(record)
+        session.flush()
+        return self._format_record(record)
 
     def _get_record_by_v3(self, session, v3, v2, filename, doi, aop):
         if not v3:
