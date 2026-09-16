@@ -304,16 +304,12 @@ class Manager:
         )
 
     def _get_record_old(self, session, v2, aop):
-        i = 0
-        record = None
-        if aop:
-            for rec in session.query(PidVersion).filter_by(v2=aop).all():
-                if rec.id > i:
-                    i = rec.id
-                    record = rec
-        if v2:
-            for rec in session.query(PidVersion).filter_by(v2=v2).all():
-                if rec.id > i:
-                    i = rec.id
-                    record = rec
-        return record
+        pids = [pid for pid in (aop, v2) if pid]
+        if not pids:
+            return None
+        return (
+            session.query(PidVersion)
+            .filter(PidVersion.v2.in_(pids))
+            .order_by(PidVersion.id.desc())
+            .first()
+        )
