@@ -17,6 +17,8 @@ logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 logging.getLogger("sqlalchemy.pool").setLevel(logging.DEBUG)
 
 
+MAX_FILENAME_LENGTH = 80
+
 class RegistrationError(Exception):
     ...
 
@@ -129,6 +131,12 @@ class Manager:
         try:
             if not v2:
                 raise ValueError("Manager.manage requires parameters: v2")
+
+            filename = filename or ""
+            if len(filename) > MAX_FILENAME_LENGTH:
+                result["warning"] = {"filename": filename}
+                filename = filename[:MAX_FILENAME_LENGTH]
+
             with self.session_scope() as session:
                 # obtém o registro
                 registered = self.get_registered(session, v2, filename, doi, aop)
@@ -184,7 +192,7 @@ class Manager:
             unique_v3 = generate_v3()
 
     def _register(self, session, v2, v3, aop, filename, doi, status, row=None):
-        filename = filename[:80]
+        filename = (filename or "")[:MAX_FILENAME_LENGTH]
         prefix_v2 = v2 and v2[:-5] or ""
         prefix_aop = aop and aop[:-5] or ""
         if row:
