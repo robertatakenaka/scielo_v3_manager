@@ -79,17 +79,20 @@ class NewPidVersion(Base):
 
 
 class Manager:
-    def __init__(self, name, timeout=None, _engine_args={}):
+    def __init__(self, name, timeout=None, _engine_args=None, create_tables=False):
         self._name = name
-        self._engine_args = {"pool_timeout": timeout} if timeout else {}
-        self._engine_args.update({"pool_size": 10, "max_overflow": 20})
-        self._engine_args.update(_engine_args)
+        self._engine_args = dict(DEFAULT_ENGINE_ARGS)
+        if timeout:
+            self._engine_args["pool_timeout"] = timeout
+        self._engine_args.update(_engine_args or {})
+        self._create_tables = create_tables
         self.setup()
 
     def setup(self):
         self._engine = create_engine(
-            self._name, logging_name='pid_manager', **self._engine_args)
-        Base.metadata.create_all(self._engine)
+            self._name, logging_name="pid_manager", **self._engine_args)
+        if self._create_tables:
+            Base.metadata.create_all(self._engine)
         self.Session = sessionmaker(bind=self._engine)
 
     @contextmanager
