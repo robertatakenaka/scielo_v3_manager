@@ -130,49 +130,43 @@ class Manager:
 
     def manage(self, v2, v3, aop, filename, doi, status, generate_v3):
         """
-        Obtém registro consultando por v2, aop, doi, filename
-        Cria / atualiza o registro
+        Obtém registro consultando por v2, aop, doi, filename.
+        Cria / atualiza o registro.
         Retorna dicionário cujas chaves são:
-            input, found, saved, error, warning
+            input, registered, saved, error, warning
         """
         result = {
             "input": {
-                "v3": v3,
-                "v2": v2,
-                "aop": aop,
-                "doi": doi,
-                "filename": filename,
-                "status": status,
+                "v3": v3, "v2": v2, "aop": aop,
+                "doi": doi, "filename": filename, "status": status,
             }
         }
+        if not v2:
+            result["error"] = "Manager.manage requires parameters: v2"
+            return result
+
+        filename = filename or ""
+        if len(filename) > MAX_FILENAME_LENGTH:
+            result["warning"] = {"filename": filename}
+            filename = filename[:MAX_FILENAME_LENGTH]
+
         saved = None
         try:
-            if not v2:
-                raise ValueError("Manager.manage requires parameters: v2")
-
-            filename = filename or ""
-            if len(filename) > MAX_FILENAME_LENGTH:
-                result["warning"] = {"filename": filename}
-                filename = filename[:MAX_FILENAME_LENGTH]
-
             with self.session_scope() as session:
-                # obtém o registro
                 registered = self.get_registered(session, v2, filename, doi, aop)
                 if registered:
-                    result['registered'] = self._format_record(registered)
-
-                # guarda o registro
+                    result["registered"] = self._format_record(registered)
                 saved = self.save(
                     session, registered, v2, v3, aop, filename, doi, status, generate_v3
                 )
-                if saved:
-                    result['saved'] = saved
-        except RegistrationError as e:
-            result['error'] = str(e)
         except Exception as e:
-            result['error'] = str(e)
-        finally:
+            logger.exception("Erro ao registrar v2=%s filename=%s", v2, filename)
+            result["error"] = "%s: %s" % (type(e).__name__, e)
             return result
+
+        if saved:
+            result["saved"] = saved
+        return result
 
     def get_registered(self, session, v2, filename, doi, aop):
         registered = None
