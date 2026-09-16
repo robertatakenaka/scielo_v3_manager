@@ -10,6 +10,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from tenacity import (
+    retry, retry_if_exception_type, stop_after_attempt, wait_fixed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +138,21 @@ class Manager:
                 )
             return result
 
+    @retry(
+        retry=retry_if_exception_type(RegistrationConflict),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(0.2),
+        reraise=True,
+    )
+    def _manage_once(self, v2, v3, aop, filename, doi, status, generate_v3):
+        with self.session_scope() as session:
+            registered = self.get_registered(session, v2, filename, doi, aop)
+            found = self._format_record(registered) if registered else None
+            saved = self.save(
+                session, registered, v2, v3, aop, filename, doi, status, generate_v3
+            )
+        return found, saved
+
     def manage(self, v2, v3, aop, filename, doi, status, generate_v3):
         """
         Obtém registro consultando por v2, aop, doi, filename.
@@ -159,13 +177,9 @@ class Manager:
 
         saved = None
         try:
-            with self.session_scope() as session:
-                registered = self.get_registered(session, v2, filename, doi, aop)
-                if registered:
-                    result["registered"] = self._format_record(registered)
-                saved = self.save(
-                    session, registered, v2, v3, aop, filename, doi, status, generate_v3
-                )
+            result["registered"], saved = self._manage_once(
+                v2, v3, aop, filename, doi, status, generate_v3,
+            )
         except Exception as e:
             logger.exception("Erro ao registrar v2=%s filename=%s", v2, filename)
             result["error"] = "%s: %s" % (type(e).__name__, e)
