@@ -131,36 +131,16 @@ class Manager:
                 raise ValueError("Manager.manage requires parameters: v2")
             with self.session_scope() as session:
                 # obtém o registro
-                registered = None
-                if not registered:
-                    registered = self._get_record(
-                        session, v2, filename, doi, aop)
-                if not registered:
-                    registered = self._get_record_old(session, v2, aop)
+                registered = self.get_registered(session, v2, filename, doi, aop)
                 if registered:
                     result['registered'] = self._format_record(registered)
 
                 # guarda o registro
                 if len(filename) > 80:
                     result['warning'] = {"filename": filename}
-                if registered:
-                    if not hasattr(registered, 'created'):
-                        # versão anterior do schema (v2, v3),
-                        # então registrar no novo schema
-                        saved = self._register(
-                            session, v2, registered.v3, aop,
-                            filename, doi, status)
-                    else:
-                        # já está registraddo no schema novo,
-                        # então fazer atualização
-                        saved = self._register(
-                            session, v2, v3, aop,
-                            filename, doi, status, registered)
-                else:
-                    saved = self._register(
-                        session, v2,
-                        self.get_unique_v3(session, v3, generate_v3),
-                        aop, filename, doi, status)
+                saved = self.save(
+                    session, registered, v2, v3, aop, filename, doi, status, generate_v3
+                )
                 if saved:
                     result['saved'] = saved
         except RegistrationError as e:
@@ -169,6 +149,28 @@ class Manager:
             result['error'] = str(e)
         finally:
             return result
+
+    def get_registered(self, session, v2, filename, doi, aop):
+        registered = None
+        if not registered:
+            registered = self._get_record(session, v2, filename, doi, aop)
+        if not registered:
+            registered = self._get_record_old(session, v2, aop)
+        return registered
+
+    def save(self, session, registered, v2, v3, aop, filename, doi, status, generate_v3):
+        row = None
+        if registered:
+            if not hasattr(registered, 'created'):
+                pid_v3 = registered.v3
+            else:
+                pid_v3 = v3
+                row = registered
+        else:
+            pid_v3 = self.get_unique_v3(session, v3, generate_v3)
+        return self._register(
+            session, v2, pid_v3, aop, filename, doi, status, row
+        )
 
     def get_unique_v3(self, session, v3, generate_v3):
         unique_v3 = v3 or generate_v3()
