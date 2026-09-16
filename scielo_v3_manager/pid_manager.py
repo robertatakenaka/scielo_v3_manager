@@ -209,51 +209,27 @@ class Manager:
             session, v2, pid_v3, aop, filename, doi, status, row
         )
 
-    def get_unique_v3(self, session, v3, generate_v3):
-        unique_v3 = v3 or generate_v3()
-        while True:
-            exist = bool(
-                session.query(NewPidVersion).filter_by(v3=unique_v3).first() or
-                session.query(PidVersion).filter_by(v3=unique_v3).first()
-            )
-            if not exist:
-                return unique_v3
-            unique_v3 = generate_v3()
-
     def _register(self, session, v2, v3, aop, filename, doi, status, row=None):
-        filename = (filename or "")[:MAX_FILENAME_LENGTH]  # [F1 · C2]
-        prefix_v2 = v2[:-5] if v2 else ""
-        prefix_aop = aop[:-5] if aop else ""
+        filename = (filename or "")[:MAX_FILENAME_LENGTH]
+        prefix_v2 = pid_prefix(v2)
+        prefix_aop = pid_prefix(aop)
 
-        if row is not None:
-            data = {
-                "v2": v2,
-                "v3": v3 or row.v3,
-                "aop": aop or row.aop,
-                "doi": doi or row.doi,
-                "filename": filename or row.filename,
-                "status": status or row.status,
-                "prefix_aop": prefix_aop or row.prefix_aop,
-                "prefix_v2": prefix_v2 or row.prefix_v2,
-            }
-            session.query(NewPidVersion).filter(
-                NewPidVersion.id == row.id
-            ).update(data, synchronize_session=False)
-            return data
+        if row is None:
+            row = NewPidVersion(v2=v2, v3=v3)
+            session.add(row)
+        else:
+            row.v2 = v2
+            row.v3 = v3 or row.v3
 
-        record = NewPidVersion(
-            v2=v2,
-            v3=v3,
-            aop=aop or "",
-            filename=filename,
-            doi=doi or "",
-            status=status or "",
-            prefix_aop=prefix_aop,
-            prefix_v2=prefix_v2,
-        )
-        session.add(record)
+        row.aop = aop or row.aop or ""
+        row.doi = doi or row.doi or ""
+        row.filename = filename or row.filename or ""
+        row.status = status or row.status or ""
+        row.prefix_v2 = prefix_v2 or row.prefix_v2 or ""
+        row.prefix_aop = prefix_aop or row.prefix_aop or ""
+
         session.flush()
-        return self._format_record(record)
+        return self._format_record(row)
 
     def get_unique_v3(self, session, v3, generate_v3):
         candidate = v3 or generate_v3()
