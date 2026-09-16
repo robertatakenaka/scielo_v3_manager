@@ -6,6 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import (
     Column, Integer, String, DateTime,
     UniqueConstraint, create_engine,
+    desc, or_,
 )
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -240,28 +241,21 @@ class Manager:
         session.flush()
         return self._format_record(record)
 
-    def _get_record_by_v3(self, session, v3, v2, filename, doi, aop):
-        if not v3:
-            return
+    def get_unique_v3(self, session, v3, generate_v3):
+        candidate = v3 or generate_v3()
+        for _ in range(MAX_V3_ATTEMPTS):
+            if not self._v3_exists(session, candidate):
+                return candidate
+            candidate = generate_v3()
+        raise RegistrationError(
+            "Não foi possível gerar v3 único em %d tentativas" % MAX_V3_ATTEMPTS)
 
-        for rec in session.query(NewPidVersion).filter_by(v3=v3).all():
-            if filename and filename == rec.filename:
-                return rec
-            if doi and doi == rec.doi:
-                return rec
-            if aop and aop in (rec.v2, rec.aop):
-                return rec
-            if v2 and v2 in (rec.v2, rec.aop):
-                return rec
-
-        for rec in session.query(PidVersion).filter_by(v3=v3).all():
-            if aop and aop == rec.v2:
-                return rec
-            if v2 and v2 == rec.v2:
-                return rec
-
-    from sqlalchemy import desc, or_
-
+    @staticmethod
+    def _v3_exists(session, v3):
+        return bool(
+            session.query(NewPidVersion.id).filter_by(v3=v3).first()
+            or session.query(PidVersion.id).filter_by(v3=v3).first()
+        )
 
     def _get_record(self, session, v2, filename, doi, aop):
         filters = []
