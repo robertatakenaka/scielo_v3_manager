@@ -1,6 +1,6 @@
 import logging
-from datetime import datetime
 from contextlib import contextmanager
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import (
@@ -10,17 +10,32 @@ from sqlalchemy import (
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
+logger = logging.getLogger(__name__)
+
+PID_SUFFIX_LENGTH = 5
+MAX_V3_ATTEMPTS = 10
+DEFAULT_ENGINE_ARGS = {"pool_size": 10, "max_overflow": 20}
+MAX_FILENAME_LENGTH = 80
+
 Base = declarative_base()
 
-logging.basicConfig()
-logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
-logging.getLogger("sqlalchemy.pool").setLevel(logging.DEBUG)
+
+def utcnow():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-MAX_FILENAME_LENGTH = 80
+def pid_prefix(pid):
+    if not pid or len(pid) <= PID_SUFFIX_LENGTH:
+        return ""
+    return pid[:-PID_SUFFIX_LENGTH]
+
 
 class RegistrationError(Exception):
     ...
+
+
+class RegistrationConflict(RegistrationError):
+    """Violação de unicidade — vale a pena tentar de novo."""
 
 
 class PidVersion(Base):
