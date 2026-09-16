@@ -260,46 +260,48 @@ class Manager:
             if v2 and v2 == rec.v2:
                 return rec
 
+    from sqlalchemy import desc, or_
+
+
     def _get_record(self, session, v2, filename, doi, aop):
-        record = None
+        filters = []
+
         if filename:
-            if not record and doi:
-                record = session.query(NewPidVersion).filter_by(
-                    doi=doi, filename=filename
-                ).first()
-            if not record and aop:
-                prefix = aop[:-5]
-                record = (
-                    session.query(NewPidVersion).filter_by(
-                        prefix_v2=prefix, filename=filename
-                    ).first() or
-                    session.query(NewPidVersion).filter_by(
-                        prefix_aop=prefix, filename=filename
-                    ).first()
+            if doi:
+                filters.append(
+                    (NewPidVersion.doi == doi) & (NewPidVersion.filename == filename)
                 )
-            if not record and v2:
-                prefix = v2[:-5]
-                record = (
-                    session.query(NewPidVersion).filter_by(
-                        prefix_v2=prefix, filename=filename
-                    ).first() or
-                    session.query(NewPidVersion).filter_by(
-                        prefix_aop=prefix, filename=filename
-                    ).first()
-                )
-        if not record and doi:
-            record = session.query(NewPidVersion).filter_by(doi=doi).first()
-        if not record and aop:
-            record = (
-                session.query(NewPidVersion).filter_by(v2=aop).first() or
-                session.query(NewPidVersion).filter_by(aop=aop).first()
-            )
-        if not record and v2:
-            record = (
-                session.query(NewPidVersion).filter_by(v2=v2).first() or
-                session.query(NewPidVersion).filter_by(aop=v2).first()
-            )
-        return record
+            for pid in (aop, v2):
+                prefix = pid_prefix(pid)
+                if prefix:
+                    filters.append(
+                        (NewPidVersion.prefix_v2 == prefix)
+                        & (NewPidVersion.filename == filename)
+                    )
+                    filters.append(
+                        (NewPidVersion.prefix_aop == prefix)
+                        & (NewPidVersion.filename == filename)
+                    )
+
+        if doi:
+            filters.append(NewPidVersion.doi == doi)
+        if aop:
+            filters.append(NewPidVersion.v2 == aop)
+            filters.append(NewPidVersion.aop == aop)
+        if v2:
+            filters.append(NewPidVersion.v2 == v2)
+            filters.append(NewPidVersion.aop == v2)
+
+        if not filters:
+            return None
+
+        # Aplica os filtros OR, ordena do mais recente para o mais antigo e pega o primeiro
+        return (
+            session.query(NewPidVersion)
+            .filter(or_(*filters))
+            .order_by(desc(NewPidVersion.updated_at))  # Ajuste o nome do atributo se necessário
+            .first()
+        )
 
     def _get_record_old(self, session, v2, aop):
         i = 0
