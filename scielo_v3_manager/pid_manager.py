@@ -194,10 +194,8 @@ class Manager:
     def save(self, session, registered, v2, v3, aop, filename, doi, status, generate_v3):
         row = None
         if registered:
-            if not isinstance(registered, NewPidVersion):
-                pid_v3 = registered.v3
-            else:
-                pid_v3 = v3
+            pid_v3 = registered.v3
+            if isinstance(registered, NewPidVersion):
                 row = registered
         else:
             pid_v3 = self.get_unique_v3(session, v3, generate_v3)
