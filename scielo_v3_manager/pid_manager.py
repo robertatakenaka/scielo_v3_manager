@@ -120,23 +120,19 @@ class Manager:
 
     @staticmethod
     def _format_record(registered):
-        if registered:
-            result = {
-                "v3": registered.v3,
-                "v2": registered.v2,
-            }
-            if isinstance(registered, NewPidVersion):
-                result.update(
-                    {
-                        "aop": registered.aop,
-                        "doi": registered.doi,
-                        "status": registered.status,
-                        "filename": registered.filename,
-                        "created": registered.created,
-                        "updated": registered.updated,
-                    }
-                )
-            return result
+        if not registered:
+            return None
+        result = {"v3": registered.v3, "v2": registered.v2}
+        if isinstance(registered, NewPidVersion):
+            result.update({
+                "aop": registered.aop,
+                "doi": registered.doi,
+                "status": registered.status,
+                "filename": registered.filename,
+                "created": registered.created,
+                "updated": registered.updated,
+            })
+        return result
 
     @retry(
         retry=retry_if_exception_type(RegistrationConflict),
