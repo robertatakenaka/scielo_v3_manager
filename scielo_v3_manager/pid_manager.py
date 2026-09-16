@@ -175,12 +175,10 @@ class Manager:
         return result
 
     def get_registered(self, session, v2, filename, doi, aop):
-        registered = None
-        if not registered:
-            registered = self._get_record(session, v2, filename, doi, aop)
-        if not registered:
-            registered = self._get_record_old(session, v2, aop)
-        return registered
+        return (
+            self._get_record(session, v2, filename, doi, aop)
+            or self._get_record_old(session, v2, aop)
+        )
 
     def save(self, session, registered, v2, v3, aop, filename, doi, status, generate_v3):
         row = None
