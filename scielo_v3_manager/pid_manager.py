@@ -8,7 +8,7 @@ from sqlalchemy import (
     UniqueConstraint, create_engine,
 )
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +102,15 @@ class Manager:
         try:
             yield session
             session.commit()
+        except IntegrityError as e:
+            session.rollback()
+            raise RegistrationConflict("Conflito de unicidade: %s" % e)
         except SQLAlchemyError as e:
             session.rollback()
-            raise RegistrationError("Rollback: %s" % str(e))
+            raise RegistrationError("Rollback: %s" % e)
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 
