@@ -97,7 +97,7 @@ class Manager:
                 "v3": registered.v3,
                 "v2": registered.v2,
             }
-            if hasattr(registered, 'created'):
+            if isinstance(registered, NewPidVersion):
                 result.update(
                     {
                         "aop": registered.aop,
@@ -167,7 +167,7 @@ class Manager:
     def save(self, session, registered, v2, v3, aop, filename, doi, status, generate_v3):
         row = None
         if registered:
-            if not hasattr(registered, 'created'):
+            if not isinstance(registered, NewPidVersion):
                 pid_v3 = registered.v3
             else:
                 pid_v3 = v3
