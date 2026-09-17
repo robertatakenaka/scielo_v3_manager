@@ -18,7 +18,6 @@ from datetime import datetime
 from unittest.mock import patch
 
 from sqlalchemy.pool import StaticPool
-from sqlalchemy.exc import SQLAlchemyError
 
 from scielo_v3_manager.pid_manager import (
     Manager,
@@ -113,6 +112,7 @@ class ManagerSetupTest(unittest.TestCase):
             manager = Manager(
                 "sqlite:///%s" % path,
                 _engine_args={"poolclass": QueuePool},
+                create_tables=True,
             )
             table_names = inspect(manager._engine).get_table_names()
             self.assertIn("pids", table_names)
@@ -255,6 +255,37 @@ class GetUniqueV3Test(ManagerTestCase):
 # ---------------------------------------------------------------------------
 # _register
 # ---------------------------------------------------------------------------
+
+class ManageRetryOnDuplicateV3Test(ManagerTestCase):
+
+    def test_manage_retries_with_new_v3_when_unique_constraint_is_hit(self):
+        seen = {"calls": 0}
+
+        def fake_register(session, v2, v3, aop, filename, doi, status, row=None):
+            seen["calls"] += 1
+            if seen["calls"] == 1:
+                raise RegistrationError("Rollback: UNIQUE constraint failed: pids.v3")
+            return {"v2": v2, "v3": v3, "aop": aop or "", "doi": doi or "", "status": status or "", "filename": filename or ""}
+
+        original_register = self.manager._register
+        self.manager._register = fake_register
+        try:
+            result = self.manager.manage(
+                v2="S0001-99999",
+                v3=None,
+                aop="",
+                filename="artigo.xml",
+                doi="10.1/abc",
+                status="",
+                generate_v3=lambda: "v3-2",
+            )
+        finally:
+            self.manager._register = original_register
+
+        self.assertNotIn("error", result)
+        self.assertEqual(result["saved"]["v3"], "v3-2")
+        self.assertEqual(seen["calls"], 2)
+
 
 class RegisterTest(ManagerTestCase):
 
@@ -468,17 +499,17 @@ class ManageTest(ManagerTestCase):
             ))
 
         result = self.manager.manage(
-            v2="S0001-00002", v3="v3-atualizado", aop="", filename="art2.xml",
+            v2="S0001-00002", v3="v3_no_xml", aop="", filename="art2.xml",
             doi="10.1/antigo", status="PUB", generate_v3=lambda: "nao-usado",
         )
         self.assertIn("registered", result)
         self.assertIn("saved", result)
-        self.assertEqual(result["saved"]["v3"], "v3-atualizado")
+        self.assertEqual(result["saved"]["v3"], "v3-antigo")
 
         with self.manager.session_scope() as session:
             row = session.query(NewPidVersion).filter_by(
                 v2="S0001-00002").first()
-            self.assertEqual(row.v3, "v3-atualizado")
+            self.assertEqual(row.v3, "v3-antigo")
 
     def test_migrates_existing_old_schema_record(self):
         with self.manager.session_scope() as session:
