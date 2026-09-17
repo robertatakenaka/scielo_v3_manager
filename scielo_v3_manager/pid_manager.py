@@ -135,7 +135,7 @@ class Manager:
         return result
 
     @retry(
-        retry=retry_if_exception_type(RegistrationConflict),
+        retry=retry_if_exception_type(RegistrationError),
         stop=stop_after_attempt(3),
         wait=wait_fixed(0.2),
         reraise=True,
@@ -173,7 +173,7 @@ class Manager:
 
         saved = None
         try:
-            result["registered"], saved = self._manage_once(
+            found, saved = self._manage_once(
                 v2, v3, aop, filename, doi, status, generate_v3,
             )
         except Exception as e:
@@ -181,6 +181,8 @@ class Manager:
             result["error"] = "%s: %s" % (type(e).__name__, e)
             return result
 
+        if found:
+            result["registered"] = found
         if saved:
             result["saved"] = saved
         return result
@@ -277,7 +279,7 @@ class Manager:
         return (
             session.query(NewPidVersion)
             .filter(or_(*filters))
-            .order_by(desc(NewPidVersion.updated_at))  # Ajuste o nome do atributo se necessário
+            .order_by(desc(NewPidVersion.updated))
             .first()
         )
 
